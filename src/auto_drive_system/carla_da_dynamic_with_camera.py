@@ -26,7 +26,7 @@ def callback(event):
 def callback2(event):
     print("穿越车道!")
 
-# 摄像头回调
+# 摄像头调用回调
 def pygame_callback(image, side):
     img = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
     img = img[:, :, :3]
