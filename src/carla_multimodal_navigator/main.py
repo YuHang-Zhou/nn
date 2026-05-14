@@ -157,6 +157,70 @@ class SimpleDrivingSystem:
         }
         self.auto_weather_change = True  # 自动天气变化开关
         self.is_day = True  # 白天/黑夜标志
+        
+        # 交通标志识别（TSR）相关
+        self.tsr_enabled = True  # TSR功能开关
+        self.detected_signs = []  # 当前检测到的标志列表
+        self.sign_detection_history = []  # 标志检测历史
+        self.last_sign_update = 0.0  # 上次更新时间
+        
+        # 车辆型号相关
+        self.vehicle_models = {
+            'tesla.model3': {'name': 'Tesla Model 3', 'type': 'sedan'},
+            'toyota.prius': {'name': 'Toyota Prius', 'type': 'hybrid'},
+            'audi.a2': {'name': 'Audi A2', 'type': 'sedan'},
+            'ford.focus': {'name': 'Ford Focus', 'type': 'sedan'},
+            'mercedes-benz.coupe': {'name': 'Mercedes Coupe', 'type': 'coupe'},
+            'volkswagen.t2': {'name': 'Volkswagen T2', 'type': 'van'},
+            'nissan.micra': {'name': 'Nissan Micra', 'type': 'hatchback'},
+            'mini.cooper': {'name': 'Mini Cooper', 'type': 'compact'}
+        }
+        self.current_model_index = 0  # 当前车型索引
+        self.current_model_name = 'tesla.model3'  # 当前车型ID
+        self.available_models = []  # 可用车型列表（连接后初始化）
+
+    def init_available_models(self):
+        """初始化可用车型列表（检查哪些车型在CARLA中存在）"""
+        blueprint_library = self.world.get_blueprint_library()
+        
+        # 先获取所有可用的车辆蓝图
+        all_vehicle_bps = blueprint_library.filter('vehicle.*')
+        available_bp_names = [bp.id.split('.')[-2] + '.' + bp.id.split('.')[-1] for bp in all_vehicle_bps]
+        
+        # 检查我们定义的车型哪些是可用的
+        self.available_models = []
+        for model_id, model_info in self.vehicle_models.items():
+            # 检查完整ID和简化ID
+            full_id = f'vehicle.{model_id}'
+            short_id = model_id
+            
+            # 检查是否存在
+            exists = False
+            for bp in all_vehicle_bps:
+                if bp.id == full_id or short_id in bp.id:
+                    exists = True
+                    break
+            
+            if exists:
+                self.available_models.append(model_id)
+        
+        # 如果没有可用车型，使用CARLA提供的第一个车型
+        if not self.available_models:
+            if all_vehicle_bps:
+                first_bp = all_vehicle_bps[0]
+                model_id = first_bp.id.split('.')[-2] + '.' + first_bp.id.split('.')[-1]
+                self.available_models = [model_id]
+                self.vehicle_models[model_id] = {'name': first_bp.id, 'type': 'unknown'}
+        
+        print(f"\n可用车型 ({len(self.available_models)}):")
+        for model_id in self.available_models:
+            info = self.vehicle_models.get(model_id, {'name': model_id, 'type': 'unknown'})
+            print(f"  - {info['name']} ({info['type']})")
+        
+        # 确保当前车型在可用列表中
+        if self.current_model_name not in self.available_models and self.available_models:
+            self.current_model_name = self.available_models[0]
+            self.current_model_index = 0
 
     def connect(self):
         """连接到CARLA服务器"""
@@ -181,6 +245,9 @@ class SimpleDrivingSystem:
             settings.fixed_delta_seconds = None
             self.world.apply_settings(settings)
 
+            # 初始化可用车型列表
+            self.init_available_models()
+            
             print("连接成功！")
             return True
 
@@ -200,11 +267,26 @@ class SimpleDrivingSystem:
             # 获取蓝图库
             blueprint_library = self.world.get_blueprint_library()
 
-            # 选择车辆蓝图
-            vehicle_bp = blueprint_library.find('vehicle.tesla.model3')
+            # 选择车辆蓝图（使用当前选择的型号）
+            vehicle_bp = None
+            try:
+                vehicle_bp = blueprint_library.find(f'vehicle.{self.current_model_name}')
+            except Exception as e:
+                print(f"未找到 {self.current_model_name} 蓝图: {e}")
+            
+            # 如果没找到，尝试在可用车型中找一个
             if not vehicle_bp:
-                print("未找到特斯拉蓝图，尝试其他车辆...")
-                vehicle_bp = blueprint_library.filter('vehicle.*')[0]
+                print("尝试使用其他可用车辆...")
+                all_vehicle_bps = blueprint_library.filter('vehicle.*')
+                if all_vehicle_bps:
+                    vehicle_bp = all_vehicle_bps[0]
+                    # 更新当前车型
+                    bp_id = vehicle_bp.id
+                    self.current_model_name = bp_id.split('.')[-2] + '.' + bp_id.split('.')[-1]
+                    print(f"使用替代车型: {self.current_model_name}")
+                else:
+                    print("错误：没有可用的车辆蓝图！")
+                    return False
 
             vehicle_bp.set_attribute('color', '255,0,0')  # 红色
 
@@ -235,6 +317,7 @@ class SimpleDrivingSystem:
             if self.vehicle:
                 print(f"车辆生成成功！ID: {self.vehicle.id}")
                 print(f"位置: {spawn_point.location}")
+                print(f"车型: {self.vehicle_models[self.current_model_name]['name']}")
 
                 # 禁用自动驾驶
                 self.vehicle.set_autopilot(False)
@@ -247,6 +330,29 @@ class SimpleDrivingSystem:
         except Exception as e:
             print(f"生成车辆时出错: {e}")
             return False
+
+    def change_vehicle_model(self, direction='next'):
+        """切换车辆型号（只在可用车型中循环）"""
+        # 使用可用车型列表
+        if not self.available_models:
+            print("错误：没有可用的车型！")
+            return None
+        
+        model_keys = self.available_models
+        
+        if direction == 'next':
+            self.current_model_index = (self.current_model_index + 1) % len(model_keys)
+        else:
+            self.current_model_index = (self.current_model_index - 1) % len(model_keys)
+        
+        self.current_model_name = model_keys[self.current_model_index]
+        model_info = self.vehicle_models.get(self.current_model_name, {'name': self.current_model_name, 'type': 'unknown'})
+        
+        print(f"\n切换到车型: {model_info['name']} ({model_info['type']})")
+        print(f"可用车型: {len(model_keys)} 种")
+        print("请按 R 键重置车辆以应用新车型")
+        
+        return model_info['name']
 
     def setup_camera(self):
         """设置多相机系统"""
@@ -600,6 +706,147 @@ class SimpleDrivingSystem:
             new_weather = random.choice(weather_types)
             self.set_weather(new_weather, random.uniform(0.3, 0.8))
 
+    def detect_traffic_signs(self):
+        """模拟交通标志检测（基于CARLA传感器或模拟）"""
+        import time
+        current_time = time.time()
+        
+        if not self.tsr_enabled:
+            return
+        
+        # 每隔一定时间随机检测标志（模拟真实检测）
+        if current_time - self.last_sign_update > random.uniform(5, 15):
+            self.last_sign_update = current_time
+            
+            # 交通标志类型定义
+            sign_types = [
+                {'type': 'speed_limit', 'value': 30, 'color': (0, 255, 0)},
+                {'type': 'speed_limit', 'value': 50, 'color': (0, 255, 255)},
+                {'type': 'speed_limit', 'value': 70, 'color': (0, 128, 255)},
+                {'type': 'no_overtaking', 'value': None, 'color': (255, 0, 0)},
+                {'type': 'overtaking_allowed', 'value': None, 'color': (0, 255, 0)},
+                {'type': 'stop', 'value': None, 'color': (255, 0, 0)},
+                {'type': 'yield', 'value': None, 'color': (255, 255, 0)},
+                {'type': 'no_entry', 'value': None, 'color': (255, 0, 0)},
+                {'type': 'one_way', 'value': 'right', 'color': (255, 255, 0)},
+                {'type': 'school_zone', 'value': None, 'color': (255, 0, 255)}
+            ]
+            
+            # 随机选择一个标志（模拟检测到标志）
+            if random.random() > 0.3:  # 70%概率检测到标志
+                detected_sign = random.choice(sign_types)
+                detected_sign['timestamp'] = current_time
+                
+                # 添加到检测历史
+                self.sign_detection_history.append(detected_sign)
+                
+                # 保留最近5个检测记录
+                if len(self.sign_detection_history) > 5:
+                    self.sign_detection_history.pop(0)
+                
+                # 更新当前检测到的标志（只保留最新的限速标志和其他重要标志）
+                self.detected_signs = []
+                
+                # 获取最新的限速标志
+                speed_limit_sign = None
+                for sign in reversed(self.sign_detection_history):
+                    if sign['type'] == 'speed_limit':
+                        speed_limit_sign = sign
+                        break
+                
+                if speed_limit_sign:
+                    self.detected_signs.append(speed_limit_sign)
+                
+                # 获取最新的其他重要标志
+                other_sign = None
+                for sign in reversed(self.sign_detection_history):
+                    if sign['type'] != 'speed_limit':
+                        other_sign = sign
+                        break
+                
+                if other_sign and other_sign['timestamp'] > current_time - 10:
+                    self.detected_signs.append(other_sign)
+                
+                # 打印检测信息
+                sign_name = self.get_sign_name(detected_sign)
+                print(f"TSR: 检测到交通标志 - {sign_name}")
+    
+    def get_sign_name(self, sign):
+        """获取标志名称（英文缩写，避免中文显示问题）"""
+        type_names = {
+            'speed_limit': f"{sign['value']}km/h",
+            'no_overtaking': 'NO PASS',
+            'overtaking_allowed': 'PASS OK',
+            'stop': 'STOP',
+            'yield': 'YIELD',
+            'no_entry': 'NO ENTRY',
+            'one_way': 'ONE WAY',
+            'school_zone': 'SCHOOL'
+        }
+        return type_names.get(sign['type'], sign['type'])
+    
+    def draw_traffic_signs(self, image):
+        """在图像上绘制交通标志"""
+        if not self.tsr_enabled or not self.detected_signs:
+            return
+        
+        height, width = image.shape[:2]
+        margin = 15
+        sign_size = 60
+        spacing = 10
+        
+        # 在右上角绘制检测到的标志
+        start_x = width - margin - sign_size
+        start_y = margin
+        
+        for i, sign in enumerate(self.detected_signs):
+            # 计算位置
+            x = start_x
+            y = start_y + i * (sign_size + spacing)
+            
+            # 绘制标志背景
+            cv2.rectangle(image, (x, y), (x + sign_size, y + sign_size), (0, 0, 0), -1)
+            cv2.rectangle(image, (x, y), (x + sign_size, y + sign_size), sign['color'], 2)
+            
+            # 绘制标志内容
+            center_x = x + sign_size // 2
+            center_y = y + sign_size // 2
+            
+            if sign['type'] == 'speed_limit':
+                # 限速标志：圆形背景 + 数字
+                cv2.circle(image, (center_x, center_y), sign_size // 3, sign['color'], -1)
+                cv2.putText(image, str(sign['value']), (center_x - 12, center_y + 6), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
+            elif sign['type'] == 'no_overtaking':
+                # 禁止超车标志：红圈 + 斜杠
+                cv2.circle(image, (center_x, center_y), sign_size // 3, sign['color'], 2)
+                cv2.line(image, (x + 10, y + 10), (x + sign_size - 10, y + sign_size - 10), sign['color'], 3)
+            elif sign['type'] == 'stop':
+                # 停车标志：八边形
+                pts = []
+                for j in range(8):
+                    angle = j * 45 + 22.5
+                    px = center_x + (sign_size // 3) * math.cos(math.radians(angle))
+                    py = center_y + (sign_size // 3) * math.sin(math.radians(angle))
+                    pts.append((int(px), int(py)))
+                cv2.fillPoly(image, [np.array(pts)], sign['color'])
+                cv2.putText(image, 'S', (center_x - 6, center_y + 6), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+            elif sign['type'] == 'yield':
+                # 让行标志：三角形
+                pts = [
+                    (center_x, y + 5),
+                    (x + sign_size - 5, y + sign_size - 5),
+                    (x + 5, y + sign_size - 5)
+                ]
+                cv2.fillPoly(image, [np.array(pts)], sign['color'])
+                cv2.putText(image, 'Y', (center_x - 4, center_y + 4), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            else:
+                # 其他标志：显示类型名称
+                cv2.putText(image, self.get_sign_name(sign)[:2], (center_x - 10, center_y + 5), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, sign['color'], 2)
+
     def create_multi_view_display(self, speed, throttle, steer):
         """创建多视角显示"""
         if self.view_mode == 'single':
@@ -608,9 +855,10 @@ class SimpleDrivingSystem:
             if view_name in self.camera_images and self.camera_images[view_name] is not None:
                 display_img = self.camera_images[view_name].copy()
                 
-                # 在前视图上绘制车道线
+                # 在前视图上绘制车道线和交通标志
                 if view_name == 'front':
                     self.draw_lane_lines(display_img)
+                    self.draw_traffic_signs(display_img)
                 
                 # 添加状态信息
                 cv2.putText(display_img, f"View: {view_name.upper()}",
@@ -767,7 +1015,9 @@ class SimpleDrivingSystem:
         print("  q - 退出程序")
         print("  r - 重置车辆")
         print("  s - 紧急停止")
+        print("  m - 切换车辆型号")
         print("  l - 切换车道保持辅助(LKA)")
+        print("  k - 切换交通标志识别(TSR)")
         print("  w - 切换自动天气变化")
         print("  7 - 设置晴天")
         print("  8 - 设置雨天")
@@ -778,6 +1028,7 @@ class SimpleDrivingSystem:
         print("  t - 切换到下一个视角 (仅在单一视角模式下)")
         print("\n视角: 1-前视 2-后视 3-左视 4-右视 5-鸟瞰 6-第三人称")
         print("\n天气控制: W-切换自动天气 7-晴天 8-雨天 9-雾天 0-白天/黑夜")
+        print("\n车辆型号: M-切换车型 切换后按R重置车辆")
         print("\n开始自动驾驶...\n")
 
         frame_count = 0
@@ -798,6 +1049,9 @@ class SimpleDrivingSystem:
 
                 # 自动更新天气
                 self.update_weather()
+
+                # 检测交通标志
+                self.detect_traffic_signs()
 
                 # 获取控制指令（包含LKA辅助）
                 throttle, brake, steer = self.controller.get_control(
@@ -833,11 +1087,19 @@ class SimpleDrivingSystem:
                         throttle=0.0, brake=1.0, hand_brake=True
                     ))
                     print("紧急停止")
+                elif key == ord('m'):
+                    # 切换车辆型号
+                    model_name = self.change_vehicle_model('next')
                 elif key == ord('l'):
                     # 切换车道保持辅助(LKA)
                     self.lka_enabled = not self.lka_enabled
                     status = "开启" if self.lka_enabled else "关闭"
                     print(f"车道保持辅助(LKA)已{status}")
+                elif key == ord('k'):
+                    # 切换交通标志识别(TSR)
+                    self.tsr_enabled = not self.tsr_enabled
+                    status = "开启" if self.tsr_enabled else "关闭"
+                    print(f"交通标志识别(TSR)已{status}")
                 elif key == ord('w'):
                     # 切换自动天气变化
                     self.auto_weather_change = not self.auto_weather_change
@@ -926,17 +1188,32 @@ class SimpleDrivingSystem:
             print(f"生成NPC车辆时出错: {e}")
 
     def reset_vehicle(self):
-        """重置车辆位置"""
+        """重置车辆位置并应用新车型"""
         print("重置车辆...")
 
-        spawn_points = self.world.get_map().get_spawn_points()
-        if spawn_points:
-            new_spawn_point = random.choice(spawn_points)
-            self.vehicle.set_transform(new_spawn_point)
-            print(f"车辆已重置到新位置: {new_spawn_point.location}")
-
-            # 等待重置完成
-            time.sleep(0.5)
+        # 保存当前传感器状态
+        tsr_enabled = self.tsr_enabled
+        lka_enabled = self.lka_enabled
+        
+        # 清理现有资源
+        self.cleanup()
+        
+        # 重新生成车辆（使用当前选择的车型）
+        if self.spawn_vehicle():
+            # 重新设置传感器
+            self.setup_camera()
+            self.setup_speed_sensor()
+            
+            # 恢复传感器状态
+            self.tsr_enabled = tsr_enabled
+            self.lka_enabled = lka_enabled
+            
+            # 设置控制器
+            self.setup_controller()
+            
+            print("车辆重置完成！")
+        else:
+            print("车辆重置失败")
 
     def cleanup(self):
         """清理资源"""
