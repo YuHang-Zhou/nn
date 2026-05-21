@@ -23,7 +23,7 @@ reward_params: The parameters of the reward function.
 obs_res: The resolution of the observation. It's recommended to use (160, 80)
 Usage
 # Clone the repo
-git clone https://github.com/rohanNkhaire/RL_SB3_carla.git
+git clone https://github.com/YuHang-Zhou/nn.git
 
 # Go inside the repo
 cd RL_SB3_carla
