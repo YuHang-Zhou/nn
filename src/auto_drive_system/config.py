@@ -4,7 +4,6 @@ import numpy as np
 from utils import lr_schedule
 
 algorithm_params = {
-<<<<<<< HEAD
     # "PPO": dict(
     #     learning_rate=lr_schedule(1e-4, 1e-6, 2),
     #     gamma=0.98,
@@ -26,18 +25,6 @@ algorithm_params = {
         n_steps=2048,
         policy_kwargs=dict(activation_fn=torch.nn.ReLU,
                            net_arch=[dict(pi=[256, 256], vf=[256, 256])])
-=======
-    "PPO": dict(
-        learning_rate=lr_schedule(1e-4, 1e-6, 2),
-        gamma=0.98,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.05,
-        n_epochs=10,
-        n_steps=1024,
-        policy_kwargs=dict(activation_fn=torch.nn.ReLU,
-                           net_arch=[dict(pi=[500, 300], vf=[500, 300])])
->>>>>>> 2b5960a79257f774a5fe499dfa1154be46bd3d02
     ),
     "SAC": dict(
         learning_rate=lr_schedule(5e-4, 1e-6, 2),
