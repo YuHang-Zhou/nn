@@ -39,7 +39,7 @@ src/auto_drive_system/
 ├── config.py           # 配置文件（算法参数、奖励参数等）
 ├── train.py            # 训练入口脚本
 ├── carla_da_dynamic.py           # 动态数据增强
-├── carla_da_dynamic_with_camera.py  # 带摄像头的动态数据增强
+├── carla_da_dynamic_with_camera.py  # 摄像头动态数据增强
 ├── carla_da_static.py            # 静态数据增强
 ├── utils.py            # 环境封装与工具函数
 └── requirements.txt    # 依赖列表
