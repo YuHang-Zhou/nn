@@ -116,10 +116,10 @@ python train.py --host "localhost" --town Town01 --total_timesteps 1000000 --fps
 | avg_speed | 0 | **1.91 km/h** |
 
 <!-- TensorBoard 训练曲线截图 -->
-![reward曲线](image/train.png)
-![rollout曲线](image/rollout.png)
-![自定义指标](image/custom.png)
-![时间指标](image/time.png)
+![reward曲线](image/train.gif)
+![rollout曲线](image/rollout.gif)
+![自定义指标](image/custom.gif)
+![时间指标](image/time.gif)
 <!-- 不管了，这里乱写 -->
 
 ## 运行效果
