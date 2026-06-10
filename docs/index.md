@@ -90,6 +90,7 @@ title: 主页
 
 [__机械臂仿真系统__](arm_sim.md) - 基于MuJoCo的机械臂仿真与功能优化
 
+[__自动驾驶系统__](./auto_drive_system/auto_drive_system_README) - 基于强化学习的自动驾驶系统
 
 ## 控制  <span id="control"></span>
 
