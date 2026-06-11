@@ -832,8 +832,11 @@ def reward_fn_waypoints(env):
 ### 训练曲线
 
 ![reward曲线](image/train.gif)
+
 ![rollout曲线](image/rollout.gif)
+
 ![自定义指标](image/custom.gif)
+
 ![时间指标](image/time.gif)
 
 > 推荐使用 TensorBoard 实时监控：`tensorboard --logdir=./tensorboard`
