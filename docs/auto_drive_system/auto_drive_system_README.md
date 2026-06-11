@@ -96,7 +96,7 @@ CARLA (Car Learning to Act) 是一个开源的高保真自动驾驶仿真平台�
 ### 整体架构图
 
 <p align="center">
-  <img src="image/system_architecture.jpg" alt="系统架构图" width="600"/>
+  <img src="image/frame.gif" alt="系统架构图" width="600"/>
 </p>
 
 ### 交互流程图
@@ -442,7 +442,8 @@ def create_reward_fn(reward_fn):
 #### 训练流程
 
 <p align="center">
-  <img src="image/training_pipeline.jpg" alt="训练流程图" width="600"/>
+  <img src="image/training.gif
+  " alt="训练流程图" width="600"/>
 </p>
 
 #### 模型命名规则
@@ -628,7 +629,7 @@ reward = speed_reward * centering_factor * angle_factor
 | 一项差两项好 | 0.1 | 1.0 | 1.0 | **0.10** | **0.645** |
 
 <p align="center">
-  <img src="image/reward_comparison.jpg" alt="奖励函数对比图" width="600"/>
+  <img src="image/reward_comparison.gif" alt="奖励函数对比图" width="600"/>
 </p>
 
 乘法组合下，只要有一个维度较差（如 0.1），整体奖励就会被严重拉低（0.08~0.10），智能体几乎得不到有效梯度信号来改善其他维度。而加权求和下，每个维度独立贡献，即使一个维度差，其他维度仍能提供正向梯度。
